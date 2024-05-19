@@ -22,114 +22,61 @@ import com.google.android.exoplayer2.SimpleExoPlayer
 import com.lizongying.mytv.databinding.PlayerBinding
 import com.lizongying.mytv.models.TVViewModel
 
+import tv.danmaku.ijk.media.player.IMediaPlayer;
+import tv.danmaku.ijk.media.player.IjkMediaPlayer;
+import com.lizongying.mytv.IjkUtil;
 
 class PlayerFragment : Fragment(), SurfaceHolder.Callback {
 
     private var _binding: PlayerBinding? = null
-    private var playerView: PlayerView? = null
     private var tvViewModel: TVViewModel? = null
     private val aspectRatio = 16f / 9f
 
 
     private lateinit var surfaceView: SurfaceView
     private lateinit var surfaceHolder: SurfaceHolder
-    private var exoPlayer: SimpleExoPlayer? = null
+    private var ijkUtil: IjkUtil? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
+        Log.i(TAG, "onCreateView")
         _binding = PlayerBinding.inflate(inflater, container, false)
 
-        if (Utils.isTmallDevice()) {
-            _binding!!.playerView.visibility = View.GONE
-            surfaceView = _binding!!.surfaceView
-            surfaceHolder = surfaceView.holder
-            surfaceHolder.addCallback(this)
-        } else {
-            _binding!!.surfaceView.visibility = View.GONE
-            playerView = _binding!!.playerView
+        surfaceView = _binding!!.surfaceView
+        surfaceHolder = surfaceView.holder
+        surfaceHolder.addCallback(this)
+
+        ijkUtil = IjkUtil.getInstance();
+        ijkUtil?.setOnErrorListener(TAG) { what, extra ->
+            Log.e(TAG, "PlaybackException what=" + what + " extra=" + extra)
+            val err = "播放错误"
+            tvViewModel?.setErrInfo(err)
+            tvViewModel?.changed("retry")
         }
 
-        playerView?.viewTreeObserver?.addOnGlobalLayoutListener(object :
-            ViewTreeObserver.OnGlobalLayoutListener {
-            @OptIn(UnstableApi::class)
-            override fun onGlobalLayout() {
-                playerView!!.viewTreeObserver.removeOnGlobalLayoutListener(this)
-
-//                val renderersFactory = context?.let { DefaultRenderersFactory(it) }
-//                renderersFactory?.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-
-                playerView!!.player = activity?.let {
-                    ExoPlayer.Builder(it)
-//                        .setRenderersFactory(renderersFactory!!)
-                        .build()
-                }
-                playerView!!.player?.playWhenReady = true
-                playerView!!.player?.addListener(object : Player.Listener {
-                    override fun onVideoSizeChanged(videoSize: VideoSize) {
-                        val ratio = playerView?.measuredWidth?.div(playerView?.measuredHeight!!)
-                        if (ratio != null) {
-                            val layoutParams = playerView?.layoutParams
-                            if (ratio < aspectRatio) {
-                                layoutParams?.height =
-                                    (playerView?.measuredWidth?.div(aspectRatio))?.toInt()
-                                playerView?.layoutParams = layoutParams
-                            } else if (ratio > aspectRatio) {
-                                layoutParams?.width =
-                                    (playerView?.measuredHeight?.times(aspectRatio))?.toInt()
-                                playerView?.layoutParams = layoutParams
-                            }
-                        }
-                    }
-
-                    override fun onPlayerError(error: PlaybackException) {
-                        super.onPlayerError(error)
-                        Log.e(TAG, "PlaybackException $error")
-                        val err = "播放错误"
-                        tvViewModel?.setErrInfo(err)
-                        tvViewModel?.changed("retry")
-                    }
-
-                    override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        super.onIsPlayingChanged(isPlaying)
-                        if (isPlaying) {
-                            tvViewModel?.setErrInfo("")
-                        }
-                    }
-                })
-            }
-        })
+        ijkUtil?.setOnPreparedListener(TAG) {
+            tvViewModel?.setErrInfo("")
+        }
+ 
         (activity as MainActivity).fragmentReady(TAG)
         return _binding!!.root
     }
 
     @OptIn(UnstableApi::class)
     fun play(tvViewModel: TVViewModel) {
+        Log.i(TAG, "play")
         this.tvViewModel = tvViewModel
-        playerView?.player?.run {
-            setMediaItem(MediaItem.fromUri(tvViewModel.getVideoUrlCurrent()))
-            prepare()
-        }
-        exoPlayer?.run {
-            setMediaItem(com.google.android.exoplayer2.MediaItem.fromUri(tvViewModel.getVideoUrlCurrent()))
-            prepare()
-        }
+        ijkUtil?.reset()
+        ijkUtil?.setDisplay(surfaceHolder)
+        ijkUtil?.setDataSource(tvViewModel.getVideoUrlCurrent())
+        ijkUtil?.prepareAsync()
     }
 
     override fun onStart() {
         Log.i(TAG, "onStart")
         super.onStart()
-        if (playerView != null && playerView!!.player?.isPlaying == false) {
-            Log.i(TAG, "replay")
-            playerView!!.player?.prepare()
-            playerView!!.player?.play()
-        }
-        if (exoPlayer?.isPlaying == false) {
-            Log.i(TAG, "replay")
-            exoPlayer?.prepare()
-            exoPlayer?.play()
-        }
     }
 
     override fun onResume() {
@@ -138,25 +85,22 @@ class PlayerFragment : Fragment(), SurfaceHolder.Callback {
     }
 
     override fun onPause() {
+        Log.i(TAG, "onPause")
         super.onPause()
-        if (playerView != null && playerView!!.player?.isPlaying == true) {
-            playerView!!.player?.stop()
-        }
-        if (exoPlayer?.isPlaying == true) {
-            exoPlayer?.stop()
+        if (ijkUtil?.isPlaying() == true) {
+            ijkUtil?.stop()
         }
     }
 
     override fun onDestroy() {
+        Log.i(TAG, "onDestroy")
         super.onDestroy()
-        if (playerView != null) {
-            playerView!!.player?.release()
-        }
-        exoPlayer?.release()
     }
 
     override fun onDestroyView() {
+        Log.i(TAG, "onDestroyView")
         super.onDestroyView()
+        ijkUtil?.release()
         _binding = null
     }
 
@@ -165,14 +109,14 @@ class PlayerFragment : Fragment(), SurfaceHolder.Callback {
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
-        exoPlayer = SimpleExoPlayer.Builder(requireContext()).build()
-        exoPlayer?.setVideoSurfaceHolder(surfaceHolder)
-        exoPlayer?.playWhenReady = true
+        Log.i(TAG, "surfaceCreated")
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        Log.i(TAG, "surfaceChanged format=" + format + " width=" + width + " height=" + height)
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
+        Log.i(TAG, "surfaceDestroyed")
     }
 }
