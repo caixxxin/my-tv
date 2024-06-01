@@ -27,20 +27,7 @@ class UpdateManager(
         CoroutineScope(Dispatchers.Main).launch {
             var text = "版本获取失败"
             var update = false
-            try {
-                release = releaseRequest.getRelease()
-                val code = release?.version_code
-                if (code != null) {
-                    if (code.toLong() > versionCode) {
-                        text = "最新版本：${release?.version_name}"
-                        update = true
-                    } else {
-                        text = "已是最新版本，不需要更新"
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error occurred: ${e.message}", e)
-            }
+            text = "已是最新版本，不需要更新"
             updateUI(text, update)
         }
     }
