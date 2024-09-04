@@ -6,8 +6,9 @@
     android:layout_height="match_parent"
     android:background="@color/black"
     android:keepScreenOn="true">
-    <androidx.media3.ui.PlayerView
-        android:id="@+id/player_view"
+
+    <SurfaceView
+        android:id="@+id/surface_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_gravity="center"
